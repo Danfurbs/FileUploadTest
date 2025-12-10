@@ -81,9 +81,9 @@
   <main class="panel">
     <h1>Safe upload demo</h1>
     <p>
-      This page avoids keeping a permanent <code>&lt;input type="file"&gt;</code> in the DOM. Instead, it creates a
-      one-time picker only when you click "Select a file" and immediately discards it after the selection. The
-      file is never read in JavaScript.
+      This demo uses a single, hidden <code>&lt;input type="file"&gt;</code> that is triggered when you click "Select a file".
+      The chosen file is read with <code>FileReader.readAsText()</code> so we can confirm the browser can safely load it
+      without relying on drag-and-drop or the File System Access API.
     </p>
 
     <div class="actions">
@@ -92,7 +92,8 @@
       <button type="button" id="reset-button">Reset</button>
     </div>
 
-    <p class="hint">Edge-specific mitigation: using the File System Access API when available, otherwise a transient hidden input.</p>
+    <p class="hint">Reads the selected file as text and shows a short preview. Edge 143 has a crash bug when using
+      FileReader, so this demo auto-switches to a safer path on that version.</p>
 
     <div id="status" class="status" aria-live="polite">No file selected.</div>
   </main>
@@ -103,7 +104,30 @@
     const resetButton = document.getElementById("reset-button");
     const status = document.getElementById("status");
 
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.style.position = "fixed";
+    fileInput.style.left = "-9999px";
+    document.body.appendChild(fileInput);
+
     let selectedFile = null;
+    let lastFileText = "";
+    let isEdge143 = false;
+
+    function detectEdgeVersion() {
+      const uaDataBrand = navigator.userAgentData?.brands?.find((brand) => brand.brand === "Microsoft Edge");
+      if (uaDataBrand) {
+        const major = parseInt(uaDataBrand.version.split(".")[0], 10);
+        return Number.isFinite(major) ? major : null;
+      }
+
+      const uaMatch = navigator.userAgent.match(/Edg\/(\d+)/);
+      if (uaMatch && uaMatch[1]) {
+        return parseInt(uaMatch[1], 10);
+      }
+
+      return null;
+    }
 
     function updateStatus(message) {
       status.textContent = message;
@@ -112,52 +136,55 @@
 
     function clearSelection() {
       selectedFile = null;
+      lastFileText = "";
       uploadButton.disabled = true;
       updateStatus("No file selected.");
+      fileInput.value = "";
     }
 
-    async function pickWithFSAccess() {
-      const [handle] = await window.showOpenFilePicker({ multiple: false });
-      const file = await handle.getFile();
-      return file;
-    }
+    function readFileAsText(file) {
+      if (isEdge143) {
+        // Edge 143 regression: FileReader.readAsText can crash the renderer when paired with hidden inputs.
+        // Use Blob.text() instead until the browser patch lands.
+        return file.text();
+      }
 
-    function pickWithTransientInput() {
       return new Promise((resolve, reject) => {
-        const input = document.createElement("input");
-        input.type = "file";
-        input.style.position = "fixed";
-        input.style.left = "-9999px";
-        input.addEventListener(
-          "change",
-          () => {
-            const file = input.files && input.files[0];
-            input.remove();
-            if (file) {
-              resolve(file);
-            } else {
-              reject(new Error("No file selected"));
-            }
-          },
-          { once: true }
-        );
-        document.body.appendChild(input);
-        input.click();
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result || "");
+        reader.onerror = () => reject(reader.error || new Error("Unable to read file"));
+        reader.readAsText(file);
       });
     }
 
-    async function selectFile() {
-      updateStatus("Opening picker...");
-      try {
-        const file = window.showOpenFilePicker ? await pickWithFSAccess() : await pickWithTransientInput();
-        selectedFile = file;
-        uploadButton.disabled = false;
-        updateStatus(`Ready: ${file.name || "(unnamed file)"}`);
-      } catch (error) {
-        selectedFile = null;
-        uploadButton.disabled = true;
-        updateStatus(error && error.name === "AbortError" ? "Selection cancelled." : "No file selected.");
+    async function handleFileChange(event) {
+      const file = event?.target?.files?.[0];
+      if (!file) {
+        clearSelection();
+        return;
       }
+
+      updateStatus(`Reading ${file.name} as text...`);
+      try {
+        const text = await readFileAsText(file);
+        selectedFile = file;
+        lastFileText = typeof text === "string" ? text : String(text);
+        const preview = lastFileText.slice(0, 200);
+        uploadButton.disabled = false;
+        updateStatus(
+          `Loaded ${file.name} (${file.size} bytes) via readAsText.` +
+            (preview ? `\nPreview:\n${preview}${lastFileText.length > preview.length ? "…" : ""}` : "")
+        );
+      } catch (error) {
+        clearSelection();
+        updateStatus(`Failed to read file: ${error?.message || error}`);
+      }
+    }
+
+    function selectFile() {
+      updateStatus("Opening picker...");
+      fileInput.value = "";
+      fileInput.click();
     }
 
     function uploadFile() {
@@ -166,23 +193,32 @@
         return;
       }
 
-      // We do not read the file contents; this demo only prepares the payload.
       const formData = new FormData();
       formData.append("file", selectedFile);
+      formData.append("textPreview", lastFileText);
 
-      // Instead of issuing a network request (which would need a backend), we simply confirm readiness.
-      updateStatus(`Prepared for upload: ${selectedFile.name}\n(No file bytes were read in JavaScript.)`);
+      updateStatus(
+        `Prepared for upload: ${selectedFile.name}\nCharacters read: ${lastFileText.length}\n` +
+          "(FormData is ready; no network request is made in this demo.)"
+      );
 
-      // Immediately release our reference to minimize pressure on Edge.
       selectedFile = null;
+      lastFileText = "";
       uploadButton.disabled = true;
+      fileInput.value = "";
     }
 
+    fileInput.addEventListener("change", handleFileChange);
     selectButton.addEventListener("click", selectFile);
     uploadButton.addEventListener("click", uploadFile);
     resetButton.addEventListener("click", clearSelection);
 
-    // Initialize
+    const detectedEdgeVersion = detectEdgeVersion();
+    isEdge143 = detectedEdgeVersion === 143;
+    if (isEdge143) {
+      updateStatus("Edge 143 detected: using Blob.text() workaround to avoid FileReader crash.");
+    }
+
     clearSelection();
   </script>
 </body>
