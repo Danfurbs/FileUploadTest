@@ -1,8 +1,104 @@
-<input type="file" id="f">
+<!DOCTYPE html>
+<style>
+  .drop-zone {
+    border: 2px dashed #888;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    color: #444;
+    font-family: sans-serif;
+    max-width: 360px;
+  }
+
+  .drop-zone.dragover {
+    border-color: #0b79d0;
+    color: #0b79d0;
+    background: #f0f8ff;
+  }
+
+  #file-input {
+    display: none;
+  }
+</style>
+<div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Drop a file here or press Enter to choose a file">
+  <p>Drop a file here</p>
+  <p>or</p>
+  <button id="choose-button" type="button">Choose a file</button>
+  <input type="file" id="file-input" aria-hidden="true" />
+</div>
+<pre id="status"></pre>
 <script>
-document.getElementById("f").addEventListener("change", e => {
-  const r = new FileReader();
-  r.onload = () => console.log("loaded");
-  r.readAsArrayBuffer(e.target.files[0]);
+const status = document.getElementById("status");
+const dropZone = document.getElementById("drop-zone");
+const chooseButton = document.getElementById("choose-button");
+const fileInput = document.getElementById("file-input");
+
+function log(message) {
+  status.textContent = message;
+  console.log(message);
+}
+
+function extractFile(eventPayload) {
+  // Prefer DataTransferItemList when available since it avoids the browser
+  // attempting to hydrate file metadata eagerly (observed to crash Edge).
+  const item = Array.from(eventPayload?.items || []).find((entry) => entry.kind === "file");
+  if (item) {
+    return item.getAsFile();
+  }
+
+  return eventPayload?.files?.[0];
+}
+
+function describeFile(file) {
+  if (!file) {
+    log("No file selected.");
+    return;
+  }
+
+  // Avoid touching size/type or reading contents to keep processing minimal.
+  const name = file.name || "(unnamed file)";
+  log(`Selected file: ${name}`);
+}
+
+function handleFiles(eventPayload) {
+  const file = extractFile(eventPayload);
+  describeFile(file);
+
+  // Clear references immediately to avoid lingering handles in Edge.
+  if (eventPayload?.clearData) {
+    try {
+      eventPayload.clearData();
+    } catch (error) {
+      console.warn("Unable to clear data payload", error);
+    }
+  }
+
+  if (fileInput) {
+    fileInput.value = "";
+  }
+}
+
+chooseButton.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    fileInput.click();
+  }
+});
+
+fileInput.addEventListener("change", (event) => handleFiles(event.target));
+
+dropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  dropZone.classList.add("dragover");
+});
+
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+
+// Drop handler is a defensive alternative to the file input path.
+dropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dropZone.classList.remove("dragover");
+  handleFiles(event.dataTransfer);
 });
 </script>
