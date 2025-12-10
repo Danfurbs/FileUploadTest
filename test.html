@@ -38,34 +38,31 @@ function log(message) {
   console.log(message);
 }
 
-async function readFileStream(file) {
-  if (!file) return;
-
-  const reader = file.stream().getReader();
-  let totalBytes = 0;
-
-  try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      totalBytes += value?.length ?? 0;
-    }
-    log(`Loaded ${file.name} (${totalBytes} bytes)`);
-  } catch (error) {
-    console.error("Streamed file read failed", error);
-    log("Failed to load file. Please try again.");
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-async function handleFiles(fileList) {
-  const file = fileList?.[0];
+function describeFile(file) {
   if (!file) {
     log("No file selected.");
     return;
   }
-  await readFileStream(file);
+
+  // Avoid reading the file entirely; only surface metadata to prevent crashes
+  // observed in Edge during file content reads.
+  const size = file.size;
+  const name = file.name || "(unnamed file)";
+  const type = file.type || "unknown type";
+
+  const details = [
+    `Name: ${name}`,
+    `Size: ${size.toLocaleString()} bytes`,
+    `Type: ${type}`,
+    "File content not loaded to avoid browser instability."
+  ].join("\n");
+
+  log(details);
+}
+
+function handleFiles(fileList) {
+  const file = fileList?.[0];
+  describeFile(file);
 }
 
 chooseButton.addEventListener("click", () => fileInput.click());
