@@ -1,8 +1,94 @@
-<input type="file" id="f">
+<!DOCTYPE html>
+<style>
+  .drop-zone {
+    border: 2px dashed #888;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    color: #444;
+    font-family: sans-serif;
+    max-width: 360px;
+  }
+
+  .drop-zone.dragover {
+    border-color: #0b79d0;
+    color: #0b79d0;
+    background: #f0f8ff;
+  }
+
+  #file-input {
+    display: none;
+  }
+</style>
+<div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Drop a file here or press Enter to choose a file">
+  <p>Drop a file here</p>
+  <p>or</p>
+  <button id="choose-button" type="button">Choose a file</button>
+  <input type="file" id="file-input" aria-hidden="true" />
+</div>
+<pre id="status"></pre>
 <script>
-document.getElementById("f").addEventListener("change", e => {
-  const r = new FileReader();
-  r.onload = () => console.log("loaded");
-  r.readAsArrayBuffer(e.target.files[0]);
+const status = document.getElementById("status");
+const dropZone = document.getElementById("drop-zone");
+const chooseButton = document.getElementById("choose-button");
+const fileInput = document.getElementById("file-input");
+
+function log(message) {
+  status.textContent = message;
+  console.log(message);
+}
+
+async function readFileStream(file) {
+  if (!file) return;
+
+  const reader = file.stream().getReader();
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      totalBytes += value?.length ?? 0;
+    }
+    log(`Loaded ${file.name} (${totalBytes} bytes)`);
+  } catch (error) {
+    console.error("Streamed file read failed", error);
+    log("Failed to load file. Please try again.");
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function handleFiles(fileList) {
+  const file = fileList?.[0];
+  if (!file) {
+    log("No file selected.");
+    return;
+  }
+  await readFileStream(file);
+}
+
+chooseButton.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    fileInput.click();
+  }
+});
+
+fileInput.addEventListener("change", (event) => handleFiles(event.target?.files));
+
+dropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  dropZone.classList.add("dragover");
+});
+
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+
+// Drop handler is a defensive alternative to the file input path.
+dropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dropZone.classList.remove("dragover");
+  handleFiles(event.dataTransfer?.files);
 });
 </script>
