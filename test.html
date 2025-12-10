@@ -2,17 +2,15 @@
 <input type="file" id="f">
 <script>
 const fileInput = document.getElementById("f");
-fileInput.addEventListener("change", async (event) => {
-  const file = event.target?.files?.[0];
+fileInput.addEventListener("change", (event) => {
+  const [file] = event.target.files || [];
   if (!file) {
     return;
   }
 
-  try {
-    await file.arrayBuffer();
-    console.log("loaded");
-  } catch (error) {
-    console.error("File load failed", error);
-  }
+  const reader = new FileReader();
+  reader.onload = () => console.log("loaded");
+  reader.onerror = () => console.error("File load failed");
+  reader.readAsArrayBuffer(file);
 });
 </script>
