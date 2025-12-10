@@ -38,31 +38,44 @@ function log(message) {
   console.log(message);
 }
 
+function extractFile(eventPayload) {
+  // Prefer DataTransferItemList when available since it avoids the browser
+  // attempting to hydrate file metadata eagerly (observed to crash Edge).
+  const item = Array.from(eventPayload?.items || []).find((entry) => entry.kind === "file");
+  if (item) {
+    return item.getAsFile();
+  }
+
+  return eventPayload?.files?.[0];
+}
+
 function describeFile(file) {
   if (!file) {
     log("No file selected.");
     return;
   }
 
-  // Avoid reading the file entirely; only surface metadata to prevent crashes
-  // observed in Edge during file content reads.
-  const size = file.size;
+  // Avoid touching size/type or reading contents to keep processing minimal.
   const name = file.name || "(unnamed file)";
-  const type = file.type || "unknown type";
-
-  const details = [
-    `Name: ${name}`,
-    `Size: ${size.toLocaleString()} bytes`,
-    `Type: ${type}`,
-    "File content not loaded to avoid browser instability."
-  ].join("\n");
-
-  log(details);
+  log(`Selected file: ${name}`);
 }
 
-function handleFiles(fileList) {
-  const file = fileList?.[0];
+function handleFiles(eventPayload) {
+  const file = extractFile(eventPayload);
   describeFile(file);
+
+  // Clear references immediately to avoid lingering handles in Edge.
+  if (eventPayload?.clearData) {
+    try {
+      eventPayload.clearData();
+    } catch (error) {
+      console.warn("Unable to clear data payload", error);
+    }
+  }
+
+  if (fileInput) {
+    fileInput.value = "";
+  }
 }
 
 chooseButton.addEventListener("click", () => fileInput.click());
@@ -73,7 +86,7 @@ dropZone.addEventListener("keydown", (event) => {
   }
 });
 
-fileInput.addEventListener("change", (event) => handleFiles(event.target?.files));
+fileInput.addEventListener("change", (event) => handleFiles(event.target));
 
 dropZone.addEventListener("dragover", (event) => {
   event.preventDefault();
@@ -86,6 +99,6 @@ dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover
 dropZone.addEventListener("drop", (event) => {
   event.preventDefault();
   dropZone.classList.remove("dragover");
-  handleFiles(event.dataTransfer?.files);
+  handleFiles(event.dataTransfer);
 });
 </script>
