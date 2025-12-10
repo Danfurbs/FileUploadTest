@@ -1,8 +1,18 @@
+<!DOCTYPE html>
 <input type="file" id="f">
 <script>
-document.getElementById("f").addEventListener("change", e => {
-  const r = new FileReader();
-  r.onload = () => console.log("loaded");
-  r.readAsArrayBuffer(e.target.files[0]);
+const fileInput = document.getElementById("f");
+fileInput.addEventListener("change", async (event) => {
+  const file = event.target?.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    await file.arrayBuffer();
+    console.log("loaded");
+  } catch (error) {
+    console.error("File load failed", error);
+  }
 });
 </script>
