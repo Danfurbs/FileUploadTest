@@ -1,8 +1,225 @@
-<input type="file" id="f">
-<script>
-document.getElementById("f").addEventListener("change", e => {
-  const r = new FileReader();
-  r.onload = () => console.log("loaded");
-  r.readAsArrayBuffer(e.target.files[0]);
-});
-</script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upload Demo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.min.css">
+  <style>
+    :root {
+      color-scheme: light;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      padding: 24px;
+      background: #f7f7f7;
+      color: #222;
+    }
+
+    .panel {
+      max-width: 520px;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid #d6d6d6;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      background: #4c51bf;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    button:hover,
+    button:focus {
+      background: #3b4396;
+    }
+
+    button:disabled {
+      background: #c8cbe7;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      background: #f4f6fb;
+      border: 1px solid #e1e6f6;
+      min-height: 44px;
+      font-family: ui-monospace, SFMono-Regular, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+    }
+
+    .hint {
+      margin-top: 10px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>Safe upload demo</h1>
+    <p>
+      This demo uses a single, hidden <code>&lt;input type="file"&gt;</code> that is triggered when you click "Select a file".
+      The chosen file is read with <code>FileReader.readAsText()</code> so we can confirm the browser can safely load it
+      without relying on drag-and-drop or the File System Access API.
+    </p>
+
+    <div class="actions">
+      <button type="button" id="select-button">Select a file</button>
+      <button type="button" id="upload-button" disabled>Upload (no file read)</button>
+      <button type="button" id="reset-button">Reset</button>
+    </div>
+
+    <p class="hint">Reads the selected file as text and shows a short preview. Edge 143 has a crash bug when using
+      FileReader, so this demo auto-switches to a safer path on that version.</p>
+
+    <div id="status" class="status" aria-live="polite">No file selected.</div>
+  </main>
+
+  <script>
+    const selectButton = document.getElementById("select-button");
+    const uploadButton = document.getElementById("upload-button");
+    const resetButton = document.getElementById("reset-button");
+    const status = document.getElementById("status");
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.style.position = "fixed";
+    fileInput.style.left = "-9999px";
+    document.body.appendChild(fileInput);
+
+    let selectedFile = null;
+    let lastFileText = "";
+    let isEdge143 = false;
+
+    function detectEdgeVersion() {
+      const uaDataBrand = navigator.userAgentData?.brands?.find((brand) => brand.brand === "Microsoft Edge");
+      if (uaDataBrand) {
+        const major = parseInt(uaDataBrand.version.split(".")[0], 10);
+        return Number.isFinite(major) ? major : null;
+      }
+
+      const uaMatch = navigator.userAgent.match(/Edg\/(\d+)/);
+      if (uaMatch && uaMatch[1]) {
+        return parseInt(uaMatch[1], 10);
+      }
+
+      return null;
+    }
+
+    function updateStatus(message) {
+      status.textContent = message;
+      console.log(message);
+    }
+
+    function clearSelection() {
+      selectedFile = null;
+      lastFileText = "";
+      uploadButton.disabled = true;
+      updateStatus("No file selected.");
+      fileInput.value = "";
+    }
+
+    function readFileAsText(file) {
+      if (isEdge143) {
+        // Edge 143 regression: FileReader.readAsText can crash the renderer when paired with hidden inputs.
+        // Use Blob.text() instead until the browser patch lands.
+        return file.text();
+      }
+
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result || "");
+        reader.onerror = () => reject(reader.error || new Error("Unable to read file"));
+        reader.readAsText(file);
+      });
+    }
+
+    async function handleFileChange(event) {
+      const file = event?.target?.files?.[0];
+      if (!file) {
+        clearSelection();
+        return;
+      }
+
+      updateStatus(`Reading ${file.name} as text...`);
+      try {
+        const text = await readFileAsText(file);
+        selectedFile = file;
+        lastFileText = typeof text === "string" ? text : String(text);
+        const preview = lastFileText.slice(0, 200);
+        uploadButton.disabled = false;
+        updateStatus(
+          `Loaded ${file.name} (${file.size} bytes) via readAsText.` +
+            (preview ? `\nPreview:\n${preview}${lastFileText.length > preview.length ? "…" : ""}` : "")
+        );
+      } catch (error) {
+        clearSelection();
+        updateStatus(`Failed to read file: ${error?.message || error}`);
+      }
+    }
+
+    function selectFile() {
+      updateStatus("Opening picker...");
+      fileInput.value = "";
+      fileInput.click();
+    }
+
+    function uploadFile() {
+      if (!selectedFile) {
+        updateStatus("Select a file before uploading.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("textPreview", lastFileText);
+
+      updateStatus(
+        `Prepared for upload: ${selectedFile.name}\nCharacters read: ${lastFileText.length}\n` +
+          "(FormData is ready; no network request is made in this demo.)"
+      );
+
+      selectedFile = null;
+      lastFileText = "";
+      uploadButton.disabled = true;
+      fileInput.value = "";
+    }
+
+    fileInput.addEventListener("change", handleFileChange);
+    selectButton.addEventListener("click", selectFile);
+    uploadButton.addEventListener("click", uploadFile);
+    resetButton.addEventListener("click", clearSelection);
+
+    const detectedEdgeVersion = detectEdgeVersion();
+    isEdge143 = detectedEdgeVersion === 143;
+    if (isEdge143) {
+      updateStatus("Edge 143 detected: using Blob.text() workaround to avoid FileReader crash.");
+    }
+
+    clearSelection();
+  </script>
+</body>
+</html>
