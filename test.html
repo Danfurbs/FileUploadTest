@@ -1,8 +1,189 @@
-<input type="file" id="f">
-<script>
-document.getElementById("f").addEventListener("change", e => {
-  const r = new FileReader();
-  r.onload = () => console.log("loaded");
-  r.readAsArrayBuffer(e.target.files[0]);
-});
-</script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upload Demo</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.min.css">
+  <style>
+    :root {
+      color-scheme: light;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      padding: 24px;
+      background: #f7f7f7;
+      color: #222;
+    }
+
+    .panel {
+      max-width: 520px;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid #d6d6d6;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    h1 {
+      margin-top: 0;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      background: #4c51bf;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    button:hover,
+    button:focus {
+      background: #3b4396;
+    }
+
+    button:disabled {
+      background: #c8cbe7;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      background: #f4f6fb;
+      border: 1px solid #e1e6f6;
+      min-height: 44px;
+      font-family: ui-monospace, SFMono-Regular, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre-wrap;
+    }
+
+    .hint {
+      margin-top: 10px;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>Safe upload demo</h1>
+    <p>
+      This page avoids keeping a permanent <code>&lt;input type="file"&gt;</code> in the DOM. Instead, it creates a
+      one-time picker only when you click "Select a file" and immediately discards it after the selection. The
+      file is never read in JavaScript.
+    </p>
+
+    <div class="actions">
+      <button type="button" id="select-button">Select a file</button>
+      <button type="button" id="upload-button" disabled>Upload (no file read)</button>
+      <button type="button" id="reset-button">Reset</button>
+    </div>
+
+    <p class="hint">Edge-specific mitigation: using the File System Access API when available, otherwise a transient hidden input.</p>
+
+    <div id="status" class="status" aria-live="polite">No file selected.</div>
+  </main>
+
+  <script>
+    const selectButton = document.getElementById("select-button");
+    const uploadButton = document.getElementById("upload-button");
+    const resetButton = document.getElementById("reset-button");
+    const status = document.getElementById("status");
+
+    let selectedFile = null;
+
+    function updateStatus(message) {
+      status.textContent = message;
+      console.log(message);
+    }
+
+    function clearSelection() {
+      selectedFile = null;
+      uploadButton.disabled = true;
+      updateStatus("No file selected.");
+    }
+
+    async function pickWithFSAccess() {
+      const [handle] = await window.showOpenFilePicker({ multiple: false });
+      const file = await handle.getFile();
+      return file;
+    }
+
+    function pickWithTransientInput() {
+      return new Promise((resolve, reject) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.style.position = "fixed";
+        input.style.left = "-9999px";
+        input.addEventListener(
+          "change",
+          () => {
+            const file = input.files && input.files[0];
+            input.remove();
+            if (file) {
+              resolve(file);
+            } else {
+              reject(new Error("No file selected"));
+            }
+          },
+          { once: true }
+        );
+        document.body.appendChild(input);
+        input.click();
+      });
+    }
+
+    async function selectFile() {
+      updateStatus("Opening picker...");
+      try {
+        const file = window.showOpenFilePicker ? await pickWithFSAccess() : await pickWithTransientInput();
+        selectedFile = file;
+        uploadButton.disabled = false;
+        updateStatus(`Ready: ${file.name || "(unnamed file)"}`);
+      } catch (error) {
+        selectedFile = null;
+        uploadButton.disabled = true;
+        updateStatus(error && error.name === "AbortError" ? "Selection cancelled." : "No file selected.");
+      }
+    }
+
+    function uploadFile() {
+      if (!selectedFile) {
+        updateStatus("Select a file before uploading.");
+        return;
+      }
+
+      // We do not read the file contents; this demo only prepares the payload.
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      // Instead of issuing a network request (which would need a backend), we simply confirm readiness.
+      updateStatus(`Prepared for upload: ${selectedFile.name}\n(No file bytes were read in JavaScript.)`);
+
+      // Immediately release our reference to minimize pressure on Edge.
+      selectedFile = null;
+      uploadButton.disabled = true;
+    }
+
+    selectButton.addEventListener("click", selectFile);
+    uploadButton.addEventListener("click", uploadFile);
+    resetButton.addEventListener("click", clearSelection);
+
+    // Initialize
+    clearSelection();
+  </script>
+</body>
+</html>
