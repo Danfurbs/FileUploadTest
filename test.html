@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Upload Demo</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
       color-scheme: light;
@@ -30,40 +31,7 @@
     h1 {
       margin-top: 0;
     }
-
-    .actions {
-      display: flex;
-      gap: 12px;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      appearance: none;
-      border: none;
-      background: #4c51bf;
-      color: white;
-      padding: 10px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: background 0.2s ease, transform 0.1s ease;
-    }
-
-    button:hover,
-    button:focus {
-      background: #3b4396;
-    }
-
-    button:disabled {
-      background: #c8cbe7;
-      cursor: not-allowed;
-    }
-
-    .status {
-      margin-top: 16px;
-      padding: 12px;
-      border-radius: 6px;
+@@ -67,74 +68,77 @@
       background: #f4f6fb;
       border: 1px solid #e1e6f6;
       min-height: 44px;
@@ -89,6 +57,7 @@
     <div class="actions">
       <button type="button" id="select-button">Select a file</button>
       <button type="button" id="upload-button" disabled>Upload (no file read)</button>
+      <button type="button" id="load-sharepoint">Load from SharePoint</button>
       <button type="button" id="reset-button">Reset</button>
     </div>
 
@@ -101,6 +70,7 @@
   <script>
     const selectButton = document.getElementById("select-button");
     const uploadButton = document.getElementById("upload-button");
+    const loadSharePointButton = document.getElementById("load-sharepoint");
     const resetButton = document.getElementById("reset-button");
     const status = document.getElementById("status");
 
@@ -113,6 +83,7 @@
     let selectedFile = null;
     let lastFileText = "";
     let isEdge143 = false;
+    const placeholderSharePointUrl = "https://contoso.sharepoint.com/sites/demo/Shared%20Documents/example.xlsx";
 
     function detectEdgeVersion() {
       const uaDataBrand = navigator.userAgentData?.brands?.find((brand) => brand.brand === "Microsoft Edge");
@@ -138,51 +109,7 @@
       selectedFile = null;
       lastFileText = "";
       uploadButton.disabled = true;
-      updateStatus("No file selected.");
-      fileInput.value = "";
-    }
-
-    function readFileAsText(file) {
-      if (isEdge143) {
-        // Edge 143 regression: FileReader.readAsText can crash the renderer when paired with hidden inputs.
-        // Use Blob.text() instead until the browser patch lands.
-        return file.text();
-      }
-
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result || "");
-        reader.onerror = () => reject(reader.error || new Error("Unable to read file"));
-        reader.readAsText(file);
-      });
-    }
-
-    async function handleFileChange(event) {
-      const file = event?.target?.files?.[0];
-      if (!file) {
-        clearSelection();
-        return;
-      }
-
-      updateStatus(`Reading ${file.name} as text...`);
-      try {
-        const text = await readFileAsText(file);
-        selectedFile = file;
-        lastFileText = typeof text === "string" ? text : String(text);
-        const preview = lastFileText.slice(0, 200);
-        uploadButton.disabled = false;
-        updateStatus(
-          `Loaded ${file.name} (${file.size} bytes) via readAsText.` +
-            (preview ? `\nPreview:\n${preview}${lastFileText.length > preview.length ? "…" : ""}` : "")
-        );
-      } catch (error) {
-        clearSelection();
-        updateStatus(`Failed to read file: ${error?.message || error}`);
-      }
-    }
-
-    function selectFile() {
-      updateStatus("Opening picker...");
+@@ -186,40 +190,65 @@
       fileInput.value = "";
       fileInput.click();
     }
@@ -208,9 +135,34 @@
       fileInput.value = "";
     }
 
+    async function loadExcelFromSharePoint(url) {
+      updateStatus("Fetching workbook from SharePoint...");
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) {
+        throw new Error(`SharePoint request failed with status ${response.status}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+      return workbook;
+    }
+
+    async function handleSharePointLoad() {
+      try {
+        const workbook = await loadExcelFromSharePoint(placeholderSharePointUrl);
+        const sheetNames = workbook.SheetNames.join(", ");
+        updateStatus(
+          `Loaded workbook from SharePoint.\nPlaceholder URL: ${placeholderSharePointUrl}\nSheets: ${sheetNames || "(no sheets found)"}`
+        );
+      } catch (error) {
+        updateStatus(`Failed to load from SharePoint: ${error?.message || error}`);
+      }
+    }
+
     fileInput.addEventListener("change", handleFileChange);
     selectButton.addEventListener("click", selectFile);
     uploadButton.addEventListener("click", uploadFile);
+    loadSharePointButton.addEventListener("click", handleSharePointLoad);
     resetButton.addEventListener("click", clearSelection);
 
     const detectedEdgeVersion = detectEdgeVersion();
