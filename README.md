@@ -1,30 +1,19 @@
-# FileUploadTest
+# Electron File Reader
 
-A lightweight Node.js CLI that copies a file into a local `uploads/` folder. This avoids browser-based uploads entirely, so it works even when enterprise policies block file pickers in Edge.
+A minimal Electron desktop app that opens a native file picker and shows the selected file's metadata and contents. Everything runs locally—no uploads or network calls—so you can use it as a starting point for other file-handling experiments.
 
 ## Getting started
 
-1. Install dependencies (only required if you plan to build a standalone binary):
+1. Install dependencies:
    ```bash
    npm install
    ```
-2. Run the CLI and either pass a file or follow the prompt:
+2. Start the Electron app:
    ```bash
-   # Prompted mode
    npm start
-
-   # Direct mode with options
-   node cli.js --file /path/to/your/file --dest ./uploads --name optional-name.ext
    ```
+3. Click **Choose a file** and pick any file on your machine. The app will display its name, full path, size, and text content.
 
-Uploaded copies are stored in `uploads/` by default. You can override the destination with `--dest` and the filename with `--name`.
-
-## Packaging a standalone binary
-
-The repository is configured for [`pkg`](https://github.com/vercel/pkg). After installing dependencies:
-
-```bash
-npm run build:standalone
-```
-
-This produces a single executable at `dist/file-upload` (targeted at Node.js 18 on Linux). Adjust the target in `package.json` if you need a different platform.
+## Notes
+- The file content is read as UTF-8 text for simplicity. Non-text files will still open but their content may not be readable.
+- Feel free to extend the preload or renderer scripts if you want to add drag-and-drop, multiple file selection, or different encodings.

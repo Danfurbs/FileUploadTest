@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Simple File Upload</title>
+    <title>Electron File Reader</title>
     <style>
       :root {
         color-scheme: light;
@@ -22,129 +22,132 @@
       }
 
       .panel {
-        max-width: 480px;
+        max-width: 800px;
         margin: 0 auto;
         background: #fff;
         border: 1px solid #d6d6d6;
-        border-radius: 10px;
-        padding: 20px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.05);
       }
 
       h1 {
         margin: 0 0 12px;
-        font-size: 1.4rem;
+        font-size: 1.6rem;
       }
 
       p {
         margin: 0 0 16px;
       }
 
-      label {
-        display: block;
-        margin-bottom: 12px;
-        font-weight: 600;
-      }
-
-      input[type="file"] {
-        display: block;
-        margin-bottom: 16px;
-      }
-
       button {
         appearance: none;
         border: none;
-        background: #4c51bf;
+        background: #4f46e5;
         color: #fff;
-        padding: 10px 16px;
-        border-radius: 6px;
+        padding: 12px 18px;
+        border-radius: 8px;
         cursor: pointer;
         font-weight: 600;
-        transition: background 0.2s ease;
+        transition: background 0.2s ease, transform 0.1s ease;
       }
 
       button:hover,
       button:focus {
-        background: #3b4396;
+        background: #4338ca;
       }
 
-      button:disabled {
-        background: #c8cbe7;
-        cursor: not-allowed;
+      button:active {
+        transform: translateY(1px);
       }
 
       .status {
         margin-top: 16px;
         padding: 12px;
-        border-radius: 6px;
+        border-radius: 8px;
         background: #f4f6fb;
         border: 1px solid #e1e6f6;
-        min-height: 44px;
-        font-family: ui-monospace, SFMono-Regular, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      }
+
+      .file-details {
+        margin-top: 16px;
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 8px 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      }
+
+      pre {
+        margin-top: 16px;
+        padding: 12px;
+        border-radius: 8px;
+        background: #0f172a;
+        color: #e2e8f0;
+        overflow-x: auto;
         white-space: pre-wrap;
+        word-break: break-word;
       }
     </style>
   </head>
   <body>
     <main class="panel">
-      <h1>Simple file upload tester</h1>
-      <p>
-        Choose a file and click upload. The file is sent directly to the local Node.js server so you can test whether
-        uploads work in your environment.
-      </p>
+      <h1>Simple Electron File Reader</h1>
+      <p>Select a file from your computer to preview its metadata and contents. This demo is purely local—no files are uploaded anywhere.</p>
+      <button id="select-file">Choose a file</button>
 
-      <form id="upload-form">
-        <label for="file-input">Select a file</label>
-        <input id="file-input" name="file" type="file" required />
-        <button type="submit">Upload</button>
-      </form>
+      <div class="status" id="status" aria-live="polite">No file selected yet.</div>
 
-      <div id="status" class="status" aria-live="polite">No file selected.</div>
+      <div class="file-details" id="details" hidden>
+        <strong>Name</strong><span id="file-name"></span>
+        <strong>Path</strong><span id="file-path"></span>
+        <strong>Size</strong><span id="file-size"></span>
+      </div>
+
+      <pre id="file-content" hidden></pre>
     </main>
 
     <script>
-      const form = document.getElementById("upload-form");
-      const fileInput = document.getElementById("file-input");
-      const status = document.getElementById("status");
+      const selectButton = document.getElementById('select-file');
+      const status = document.getElementById('status');
+      const details = document.getElementById('details');
+      const fileName = document.getElementById('file-name');
+      const filePath = document.getElementById('file-path');
+      const fileSize = document.getElementById('file-size');
+      const fileContent = document.getElementById('file-content');
 
       function setStatus(message) {
         status.textContent = message;
-        console.log(message);
       }
 
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
+      function resetView() {
+        details.hidden = true;
+        fileContent.hidden = true;
+        fileContent.textContent = '';
+      }
 
-        if (!fileInput.files.length) {
-          setStatus("Please choose a file first.");
-          return;
-        }
-
-        const data = new FormData();
-        data.append("file", fileInput.files[0]);
-
-        setStatus("Uploading...");
+      selectButton.addEventListener('click', async () => {
+        setStatus('Opening file picker...');
 
         try {
-          const response = await fetch("/upload", { method: "POST", body: data });
-          const result = await response.json();
-          if (!response.ok || !result.ok) {
-            throw new Error(result.message || `Upload failed with status ${response.status}`);
+          const result = await window.fileApi.selectFile();
+
+          if (result.canceled) {
+            setStatus('No file selected.');
+            resetView();
+            return;
           }
 
-          setStatus(`Success! ${result.message}\nSaved as: ${result.storedAs}\nSize: ${result.size} bytes`);
-          form.reset();
-        } catch (error) {
-          setStatus(`Upload failed: ${error.message}`);
-        }
-      });
+          fileName.textContent = result.fileName;
+          filePath.textContent = result.filePath;
+          fileSize.textContent = `${result.size.toLocaleString()} bytes`;
+          fileContent.textContent = result.content;
 
-      fileInput.addEventListener("change", () => {
-        if (fileInput.files.length) {
-          const file = fileInput.files[0];
-          setStatus(`Ready to upload: ${file.name} (${file.size} bytes)`);
-        } else {
-          setStatus("No file selected.");
+          details.hidden = false;
+          fileContent.hidden = false;
+          setStatus('File loaded successfully.');
+        } catch (error) {
+          resetView();
+          setStatus(`Unable to open file: ${error.message}`);
         }
       });
     </script>
