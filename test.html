@@ -3,17 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Upload Demo</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <title>Simple File Upload Tester</title>
   <style>
     :root {
       color-scheme: light;
     }
 
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0;
       padding: 24px;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       background: #f7f7f7;
       color: #222;
     }
@@ -21,7 +24,7 @@
     .panel {
       max-width: 520px;
       margin: 0 auto;
-      background: white;
+      background: #fff;
       border: 1px solid #d6d6d6;
       border-radius: 10px;
       padding: 20px;
@@ -29,30 +32,54 @@
     }
 
     h1 {
-      margin-top: 0;
+      margin: 0 0 12px;
     }
-@@ -67,74 +68,77 @@
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      appearance: none;
+      border: none;
+      background: #4c51bf;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+
+    button:hover,
+    button:focus {
+      background: #3b4396;
+    }
+
+    button:disabled {
+      background: #c8cbe7;
+      cursor: not-allowed;
+    }
+
+    .status {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 6px;
       background: #f4f6fb;
       border: 1px solid #e1e6f6;
       min-height: 44px;
       font-family: ui-monospace, SFMono-Regular, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       white-space: pre-wrap;
     }
-
-    .hint {
-      margin-top: 10px;
-      color: #444;
-    }
   </style>
 </head>
 <body>
   <main class="panel">
-    <h1>Safe upload demo</h1>
-    <p>
-      This demo uses a single, hidden <code>&lt;input type="file"&gt;</code> that is triggered when you click "Select a file".
-      The chosen file is read with <code>FileReader.readAsText()</code> so we can confirm the browser can safely load it
-      without relying on drag-and-drop or the File System Access API.
-    </p>
+    <h1>Simple file upload tester</h1>
+    <p>This page triggers a hidden file input, reads the selected file as text with <code>FileReader.readAsText()</code>, and shows a short preview so you can verify browser uploads work.</p>
 
     <p class="hint">
       If browser uploads are blocked by DLP, consider running this page inside a lightweight desktop wrapper (e.g.
@@ -62,26 +89,9 @@
 
     <div class="actions">
       <button type="button" id="select-button">Select a file</button>
-      <button type="button" id="upload-button" disabled>Upload (no file read)</button>
-      <button type="button" id="load-sharepoint">Load from SharePoint</button>
+      <button type="button" id="upload-button" disabled>Upload (demo only)</button>
       <button type="button" id="reset-button">Reset</button>
     </div>
-
-    <p class="hint">Reads the selected file as text and shows a short preview. Edge 143 has a crash bug when using
-      FileReader, so this demo auto-switches to a safer path on that version.</p>
-
-    <section class="hint">
-      <strong>Desktop wrapper option (WebView2/Electron/Tauri)</strong>
-      <ul>
-        <li>Run this HTML inside a native host so the picker is handled by the OS, not the browser.</li>
-        <li>Use a minimal WebView2 host (e.g., .NET with WebView2) for the smallest footprint; Electron or Tauri also
-          work.</li>
-        <li>No <code>file://</code> context is involved, and uploads use native APIs, which can follow a different and often
-          more stable DLP path.</li>
-        <li>Alternatives: drag-and-drop or clipboard paste (CSV/JSON/text) can help but may still hit the same DLP path.</li>
-        <li>Note: DLP policies may still apply; verify in your environment.</li>
-      </ul>
-    </section>
 
     <div id="status" class="status" aria-live="polite">No file selected.</div>
   </main>
@@ -101,23 +111,6 @@
 
     let selectedFile = null;
     let lastFileText = "";
-    let isEdge143 = false;
-    const placeholderSharePointUrl = "https://contoso.sharepoint.com/sites/demo/Shared%20Documents/example.xlsx";
-
-    function detectEdgeVersion() {
-      const uaDataBrand = navigator.userAgentData?.brands?.find((brand) => brand.brand === "Microsoft Edge");
-      if (uaDataBrand) {
-        const major = parseInt(uaDataBrand.version.split(".")[0], 10);
-        return Number.isFinite(major) ? major : null;
-      }
-
-      const uaMatch = navigator.userAgent.match(/Edg\/(\d+)/);
-      if (uaMatch && uaMatch[1]) {
-        return parseInt(uaMatch[1], 10);
-      }
-
-      return null;
-    }
 
     function updateStatus(message) {
       status.textContent = message;
@@ -128,7 +121,45 @@
       selectedFile = null;
       lastFileText = "";
       uploadButton.disabled = true;
-@@ -186,40 +190,65 @@
+      updateStatus("No file selected.");
+      fileInput.value = "";
+    }
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result || "");
+        reader.onerror = () => reject(reader.error || new Error("Unable to read file"));
+        reader.readAsText(file);
+      });
+    }
+
+    async function handleFileChange(event) {
+      const file = event?.target?.files?.[0];
+      if (!file) {
+        clearSelection();
+        return;
+      }
+
+      updateStatus(`Reading ${file.name} as text...`);
+      try {
+        const text = await readFileAsText(file);
+        selectedFile = file;
+        lastFileText = typeof text === "string" ? text : String(text);
+        const preview = lastFileText.slice(0, 200);
+        uploadButton.disabled = false;
+        updateStatus(
+          `Loaded ${file.name} (${file.size} bytes).` +
+            (preview ? `\nPreview:\n${preview}${lastFileText.length > preview.length ? "…" : ""}` : "")
+        );
+      } catch (error) {
+        clearSelection();
+        updateStatus(`Failed to read file: ${error?.message || error}`);
+      }
+    }
+
+    function selectFile() {
+      updateStatus("Opening picker...");
       fileInput.value = "";
       fileInput.click();
     }
@@ -183,12 +214,6 @@
     uploadButton.addEventListener("click", uploadFile);
     loadSharePointButton.addEventListener("click", handleSharePointLoad);
     resetButton.addEventListener("click", clearSelection);
-
-    const detectedEdgeVersion = detectEdgeVersion();
-    isEdge143 = detectedEdgeVersion === 143;
-    if (isEdge143) {
-      updateStatus("Edge 143 detected: using Blob.text() workaround to avoid FileReader crash.");
-    }
 
     clearSelection();
   </script>
