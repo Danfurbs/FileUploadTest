@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Upload Demo</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/modern-normalize/modern-normalize.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     :root {
       color-scheme: light;
@@ -89,6 +90,7 @@
     <div class="actions">
       <button type="button" id="select-button">Select a file</button>
       <button type="button" id="upload-button" disabled>Upload (no file read)</button>
+      <button type="button" id="load-sharepoint">Load from SharePoint</button>
       <button type="button" id="reset-button">Reset</button>
     </div>
 
@@ -101,6 +103,7 @@
   <script>
     const selectButton = document.getElementById("select-button");
     const uploadButton = document.getElementById("upload-button");
+    const loadSharePointButton = document.getElementById("load-sharepoint");
     const resetButton = document.getElementById("reset-button");
     const status = document.getElementById("status");
 
@@ -113,6 +116,7 @@
     let selectedFile = null;
     let lastFileText = "";
     let isEdge143 = false;
+    const placeholderSharePointUrl = "https://contoso.sharepoint.com/sites/demo/Shared%20Documents/example.xlsx";
 
     function detectEdgeVersion() {
       const uaDataBrand = navigator.userAgentData?.brands?.find((brand) => brand.brand === "Microsoft Edge");
@@ -208,9 +212,34 @@
       fileInput.value = "";
     }
 
+    async function loadExcelFromSharePoint(url) {
+      updateStatus("Fetching workbook from SharePoint...");
+      const response = await fetch(url, { credentials: "include" });
+      if (!response.ok) {
+        throw new Error(`SharePoint request failed with status ${response.status}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+      return workbook;
+    }
+
+    async function handleSharePointLoad() {
+      try {
+        const workbook = await loadExcelFromSharePoint(placeholderSharePointUrl);
+        const sheetNames = workbook.SheetNames.join(", ");
+        updateStatus(
+          `Loaded workbook from SharePoint.\nPlaceholder URL: ${placeholderSharePointUrl}\nSheets: ${sheetNames || "(no sheets found)"}`
+        );
+      } catch (error) {
+        updateStatus(`Failed to load from SharePoint: ${error?.message || error}`);
+      }
+    }
+
     fileInput.addEventListener("change", handleFileChange);
     selectButton.addEventListener("click", selectFile);
     uploadButton.addEventListener("click", uploadFile);
+    loadSharePointButton.addEventListener("click", handleSharePointLoad);
     resetButton.addEventListener("click", clearSelection);
 
     const detectedEdgeVersion = detectEdgeVersion();
