@@ -54,6 +54,12 @@
       without relying on drag-and-drop or the File System Access API.
     </p>
 
+    <p class="hint">
+      If browser uploads are blocked by DLP, consider running this page inside a lightweight desktop wrapper (e.g.
+      WebView2, Electron, or Tauri). It keeps the HTML the same but routes file picking through native APIs instead of the
+      browser sandbox.
+    </p>
+
     <div class="actions">
       <button type="button" id="select-button">Select a file</button>
       <button type="button" id="upload-button" disabled>Upload (no file read)</button>
@@ -63,6 +69,19 @@
 
     <p class="hint">Reads the selected file as text and shows a short preview. Edge 143 has a crash bug when using
       FileReader, so this demo auto-switches to a safer path on that version.</p>
+
+    <section class="hint">
+      <strong>Desktop wrapper option (WebView2/Electron/Tauri)</strong>
+      <ul>
+        <li>Run this HTML inside a native host so the picker is handled by the OS, not the browser.</li>
+        <li>Use a minimal WebView2 host (e.g., .NET with WebView2) for the smallest footprint; Electron or Tauri also
+          work.</li>
+        <li>No <code>file://</code> context is involved, and uploads use native APIs, which can follow a different and often
+          more stable DLP path.</li>
+        <li>Alternatives: drag-and-drop or clipboard paste (CSV/JSON/text) can help but may still hit the same DLP path.</li>
+        <li>Note: DLP policies may still apply; verify in your environment.</li>
+      </ul>
+    </section>
 
     <div id="status" class="status" aria-live="polite">No file selected.</div>
   </main>
