@@ -1,16 +1,12 @@
 {
   "name": "file-upload-test",
-  "version": "1.1.0",
-  "description": "Standalone Node.js CLI that stores a local copy of a file.",
-  "main": "cli.js",
-  "bin": {
-    "file-upload": "./cli.js"
-  },
+  "version": "2.0.0",
+  "description": "Simple Electron file reader that opens a file dialog and displays file details and contents.",
+  "main": "main.js",
   "scripts": {
-    "start": "node cli.js",
-    "build:standalone": "pkg . --targets node18-linux-x64 --output dist/file-upload"
+    "start": "electron ."
   },
   "devDependencies": {
-    "pkg": "^5.8.1"
+    "electron": "^31.2.1"
   }
 }
