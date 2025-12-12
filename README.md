@@ -1,22 +1,30 @@
 # FileUploadTest
 
-A minimal file uploader you can run locally as a standalone Node.js app. The included HTML page posts files straight to the server and shows a short status message when the upload completes.
+A lightweight Node.js CLI that copies a file into a local `uploads/` folder. This avoids browser-based uploads entirely, so it works even when enterprise policies block file pickers in Edge.
 
 ## Getting started
 
-1. Install dependencies:
+1. Install dependencies (only required if you plan to build a standalone binary):
    ```bash
    npm install
    ```
-2. Start the server (defaults to port 3000):
+2. Run the CLI and either pass a file or follow the prompt:
    ```bash
+   # Prompted mode
    npm start
+
+   # Direct mode with options
+   node cli.js --file /path/to/your/file --dest ./uploads --name optional-name.ext
    ```
-3. Open the tester at http://localhost:3000/ and upload a file. Uploaded files are saved to the `uploads/` folder.
 
-## How it works
+Uploaded copies are stored in `uploads/` by default. You can override the destination with `--dest` and the filename with `--name`.
 
-- `server.js` starts a small Express server, serves the static HTML from `public/`, and handles `POST /upload` requests using Multer.
-- `public/index.html` contains the simple upload form and JavaScript that posts the selected file to the server.
+## Packaging a standalone binary
 
-This setup keeps everything local so you can validate file uploads without depending on external services.
+The repository is configured for [`pkg`](https://github.com/vercel/pkg). After installing dependencies:
+
+```bash
+npm run build:standalone
+```
+
+This produces a single executable at `dist/file-upload` (targeted at Node.js 18 on Linux). Adjust the target in `package.json` if you need a different platform.
